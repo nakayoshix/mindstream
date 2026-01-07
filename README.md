@@ -18,8 +18,8 @@ BlueMuse + Muse2を使用したリアルタイム脳波可視化プログラム
 ## セットアップ
 
 ```bash
-git clone <repository-url>
-cd eeg_test1
+git clone https://github.com/nakayoshix/mindstream.git
+cd mindstream
 uv sync
 ```
 
