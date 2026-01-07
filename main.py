@@ -7,12 +7,14 @@ BlueMuse + Muse2 リアルタイム脳波可視化プログラム
 3. このプログラムを実行: uv run python main.py
 """
 
-import sys
 from collections import deque
 
 import numpy as np
 import pygame
 from pylsl import StreamInlet, resolve_byprop
+
+# 型エイリアス
+type Color = tuple[int, int, int]
 
 # 定数
 WINDOW_WIDTH = 1200
@@ -33,21 +35,19 @@ DEFAULT_DISPLAY_SECONDS = 5
 DEFAULT_AMPLITUDE_SCALE = 100  # ±μV範囲
 
 # 色定義
-COLORS = {
-    "background": (20, 20, 30),
-    "grid": (40, 40, 60),
-    "text": (200, 200, 200),
-    "channels": [
-        (255, 100, 100),  # TP9 - 赤
-        (100, 255, 100),  # AF7 - 緑
-        (100, 100, 255),  # AF8 - 青
-        (255, 255, 100),  # TP10 - 黄
-    ],
-}
+COLOR_BACKGROUND: Color = (20, 20, 30)
+COLOR_GRID: Color = (40, 40, 60)
+COLOR_TEXT: Color = (200, 200, 200)
+CHANNEL_COLORS: list[Color] = [
+    (255, 100, 100),  # TP9 - 赤
+    (100, 255, 100),  # AF7 - 緑
+    (100, 100, 255),  # AF8 - 青
+    (255, 255, 100),  # TP10 - 黄
+]
 
 
 class EEGVisualizer:
-    def __init__(self):
+    def __init__(self) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("MindStream - Muse2 EEG Visualizer")
@@ -56,19 +56,19 @@ class EEGVisualizer:
         self.title_font = pygame.font.Font(None, 36)
 
         # データバッファ（各チャンネル用）
-        self.buffers = [deque(maxlen=BUFFER_SIZE) for _ in range(NUM_CHANNELS)]
+        self.buffers: list[deque[float]] = [deque(maxlen=BUFFER_SIZE) for _ in range(NUM_CHANNELS)]
         for buf in self.buffers:
-            buf.extend([0] * BUFFER_SIZE)
+            buf.extend([0.0] * BUFFER_SIZE)
 
         # LSL接続
-        self.inlet = None
+        self.inlet: StreamInlet | None = None
         self.connected = False
 
         # 表示パラメータ（調整可能）
         self.display_seconds = DEFAULT_DISPLAY_SECONDS
         self.amplitude_scale = DEFAULT_AMPLITUDE_SCALE  # ±μV範囲
 
-    def connect_to_stream(self):
+    def connect_to_stream(self) -> bool:
         """LSLストリームに接続"""
         print("LSL EEGストリームを検索中...")
         streams = resolve_byprop("type", "EEG", timeout=5)
@@ -82,7 +82,7 @@ class EEGVisualizer:
         self.connected = True
         return True
 
-    def update_data(self):
+    def update_data(self) -> None:
         """LSLからデータを取得してバッファを更新"""
         if not self.connected or self.inlet is None:
             return
@@ -96,26 +96,22 @@ class EEGVisualizer:
                     value = sample[i]
                     # NaN値は前の値を維持（または0）
                     if np.isnan(value):
-                        value = self.buffers[i][-1] if self.buffers[i] else 0
-                    self.buffers[i].append(value)
+                        value = self.buffers[i][-1] if self.buffers[i] else 0.0
+                    self.buffers[i].append(float(value))
 
-    def draw_grid(self):
+    def draw_grid(self) -> None:
         """背景グリッドを描画"""
         # 水平線
         for i in range(NUM_CHANNELS + 1):
             y = 100 + i * (WINDOW_HEIGHT - 150) // NUM_CHANNELS
-            pygame.draw.line(
-                self.screen, COLORS["grid"], (50, y), (WINDOW_WIDTH - 50, y), 1
-            )
+            pygame.draw.line(self.screen, COLOR_GRID, (50, y), (WINDOW_WIDTH - 50, y), 1)
 
         # 垂直線（1秒ごと）
         for i in range(self.display_seconds + 1):
             x = 50 + i * (WINDOW_WIDTH - 100) // self.display_seconds
-            pygame.draw.line(
-                self.screen, COLORS["grid"], (x, 100), (x, WINDOW_HEIGHT - 50), 1
-            )
+            pygame.draw.line(self.screen, COLOR_GRID, (x, 100), (x, WINDOW_HEIGHT - 50), 1)
 
-    def draw_waveforms(self):
+    def draw_waveforms(self) -> None:
         """EEG波形を描画"""
         plot_width = WINDOW_WIDTH - 100
         channel_height = (WINDOW_HEIGHT - 150) // NUM_CHANNELS
@@ -141,7 +137,7 @@ class EEGVisualizer:
             scale = channel_height / (self.amplitude_scale * 2)
 
             # ポイントリストを作成
-            points = []
+            points: list[tuple[int, int]] = []
             for i, value in enumerate(downsampled):
                 x = 50 + (i * plot_width) // len(downsampled)
                 y = center_y - int(value * scale)
@@ -150,43 +146,48 @@ class EEGVisualizer:
 
             # 波形を描画
             if len(points) > 1:
-                pygame.draw.lines(self.screen, COLORS["channels"][ch], False, points, 2)
+                pygame.draw.lines(self.screen, CHANNEL_COLORS[ch], False, points, 2)
 
             # チャンネル名を描画
-            label = self.font.render(CHANNEL_NAMES[ch], True, COLORS["channels"][ch])
+            label = self.font.render(CHANNEL_NAMES[ch], True, CHANNEL_COLORS[ch])
             self.screen.blit(label, (10, center_y - 10))
 
-    def draw_status(self):
+    def draw_status(self) -> None:
         """接続状態を表示"""
         # タイトル
-        title = self.title_font.render("MindStream", True, COLORS["text"])
+        title = self.title_font.render("MindStream", True, COLOR_TEXT)
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 20))
 
         # 接続状態
         if self.connected:
             status = self.font.render("● Connected", True, (100, 255, 100))
         else:
-            status = self.font.render("○ Disconnected - Press SPACE to connect", True, (255, 100, 100))
+            status = self.font.render(
+                "○ Disconnected - Press SPACE to connect", True, (255, 100, 100)
+            )
         self.screen.blit(status, (WINDOW_WIDTH // 2 - status.get_width() // 2, 55))
 
         # 現在の設定値を表示
         settings = self.font.render(
             f"Time: {self.display_seconds}s (←/→) | Amplitude: ±{self.amplitude_scale}μV (↑/↓)",
-            True, COLORS["text"]
+            True,
+            COLOR_TEXT,
         )
         self.screen.blit(settings, (WINDOW_WIDTH // 2 - settings.get_width() // 2, 75))
 
         # 操作説明
-        help_text = self.font.render("ESC: Quit | SPACE: Reconnect | R: Reset", True, COLORS["text"])
-        self.screen.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, WINDOW_HEIGHT - 30))
+        help_text = self.font.render("ESC: Quit | SPACE: Reconnect | R: Reset", True, COLOR_TEXT)
+        self.screen.blit(
+            help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, WINDOW_HEIGHT - 30)
+        )
 
-    def reset_buffers(self):
+    def reset_buffers(self) -> None:
         """バッファをリセット"""
         for buf in self.buffers:
             buf.clear()
-            buf.extend([0] * BUFFER_SIZE)
+            buf.extend([0.0] * BUFFER_SIZE)
 
-    def run(self):
+    def run(self) -> None:
         """メインループ"""
         # 初回接続を試みる
         self.connect_to_stream()
@@ -219,7 +220,7 @@ class EEGVisualizer:
             self.update_data()
 
             # 描画
-            self.screen.fill(COLORS["background"])
+            self.screen.fill(COLOR_BACKGROUND)
             self.draw_grid()
             self.draw_waveforms()
             self.draw_status()
@@ -230,7 +231,7 @@ class EEGVisualizer:
         pygame.quit()
 
 
-def main():
+def main() -> None:
     visualizer = EEGVisualizer()
     visualizer.run()
 

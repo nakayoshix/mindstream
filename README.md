@@ -10,7 +10,7 @@ BlueMuse + Muse2を使用したリアルタイム脳波可視化プログラム
 
 ## 必要条件
 
-- Python 3.10以上
+- Python 3.14以上
 - [uv](https://docs.astral.sh/uv/) (Pythonパッケージマネージャー)
 - [BlueMuse](https://github.com/kowalej/BlueMuse) (Windows)
 - Muse2 ヘッドバンド
