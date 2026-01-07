@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "eeg-test1"
+name = "mindstream"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
