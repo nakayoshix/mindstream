@@ -1,4 +1,4 @@
-# EEG Test1
+# MindStream
 
 BlueMuse + Muse2を使用したリアルタイム脳波可視化プログラム
 

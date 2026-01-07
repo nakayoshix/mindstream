@@ -50,7 +50,7 @@ class EEGVisualizer:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("Muse2 EEG Visualizer")
+        pygame.display.set_caption("MindStream - Muse2 EEG Visualizer")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
         self.title_font = pygame.font.Font(None, 36)
@@ -159,7 +159,7 @@ class EEGVisualizer:
     def draw_status(self):
         """接続状態を表示"""
         # タイトル
-        title = self.title_font.render("Muse2 EEG Visualizer", True, COLORS["text"])
+        title = self.title_font.render("MindStream", True, COLORS["text"])
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 20))
 
         # 接続状態
