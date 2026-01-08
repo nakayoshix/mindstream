@@ -15,6 +15,8 @@ jobs:
 
       - name: Install liblsl
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libpugixml1v5
           curl -L -o liblsl.deb https://github.com/sccn/liblsl/releases/download/v1.16.2/liblsl-1.16.2-jammy_amd64.deb
           sudo dpkg -i liblsl.deb
 
