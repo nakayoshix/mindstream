@@ -5,6 +5,7 @@ BlueMuse + Muse2を使用したリアルタイム脳波可視化プログラム
 ## 特徴
 
 - Muse2の4チャンネル（TP9, AF7, AF8, TP10）をリアルタイム表示
+- **周波数帯域解析**: デルタ、シータ、アルファ、ベータ波のパワーをリアルタイム表示
 - 時間軸・振幅スケールの動的調整（キーボード＆スライダーUI）
 - LSL (Lab Streaming Layer) 経由でBlueMuseと接続
 - TOML設定ファイルとCLI引数による柔軟な設定
@@ -93,6 +94,22 @@ cp config.example.toml config.toml
 
 スライダーとキーボード操作は連動しています。スライダーを無効にするには`config.toml`で`slider.enabled = false`を設定してください。
 
+### 周波数帯域パネル
+
+画面右端に周波数帯域パワーがリアルタイム表示されます:
+
+| 帯域 | 周波数範囲 | 関連する脳状態 |
+|------|-----------|---------------|
+| Delta (δ) | 0.5-4 Hz | 深い睡眠 |
+| Theta (θ) | 4-8 Hz | 瞑想、眠気 |
+| Alpha (α) | 8-13 Hz | リラックス、閉眼 |
+| Beta (β) | 13-30 Hz | 集中、活動的思考 |
+
+- **AVERAGE**: 全チャンネル平均のパワー（相対値%）
+- **チャンネル別**: TP9, AF7, AF8, TP10それぞれのパワー
+
+周波数解析を無効にするには`config.toml`で`frequency.enabled = false`を設定してください。
+
 ## プロジェクト構造
 
 ```
@@ -103,12 +120,14 @@ mindstream/
 │   ├── cli.py               # CLI引数パーサー
 │   ├── config.py            # 設定管理（dataclasses + TOML）
 │   ├── constants.py         # 定数定義
-│   ├── ui.py                # UIコンポーネント（スライダー等）
+│   ├── frequency.py         # 周波数解析（FFT）
+│   ├── ui.py                # UIコンポーネント（スライダー、周波数パネル）
 │   └── visualizer.py        # EEGVisualizerクラス
 ├── tests/                   # テストコード
 │   ├── conftest.py          # pytest fixtures
-│   ├── test_config.py       # 設定読み込みテスト
 │   ├── test_cli.py          # CLI引数テスト
+│   ├── test_config.py       # 設定読み込みテスト
+│   ├── test_frequency.py    # 周波数解析テスト
 │   └── test_ui.py           # UIテスト
 ├── config.example.toml      # 設定ファイルサンプル
 ├── pyproject.toml           # プロジェクト設定

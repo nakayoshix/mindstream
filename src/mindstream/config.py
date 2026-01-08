@@ -86,6 +86,18 @@ class SliderConfig:
 
 
 @dataclass
+class FrequencyConfig:
+    """周波数解析設定"""
+
+    enabled: bool = True
+    panel_width: int = 160
+    window_seconds: float = 2.0
+    update_interval_ms: int = 200
+    show_per_channel: bool = True
+    show_average: bool = True
+
+
+@dataclass
 class Config:
     """MindStream全体設定"""
 
@@ -95,6 +107,7 @@ class Config:
     fonts: FontsConfig = field(default_factory=FontsConfig)
     layout: LayoutConfig = field(default_factory=LayoutConfig)
     slider: SliderConfig = field(default_factory=SliderConfig)
+    frequency: FrequencyConfig = field(default_factory=FrequencyConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> Config:
@@ -179,6 +192,22 @@ class Config:
             if "width" in slider_data:
                 config.slider.width = int(slider_data["width"])
 
+        # frequency セクション
+        if "frequency" in data:
+            freq_data = data["frequency"]
+            if "enabled" in freq_data:
+                config.frequency.enabled = bool(freq_data["enabled"])
+            if "panel_width" in freq_data:
+                config.frequency.panel_width = int(freq_data["panel_width"])
+            if "window_seconds" in freq_data:
+                config.frequency.window_seconds = float(freq_data["window_seconds"])
+            if "update_interval_ms" in freq_data:
+                config.frequency.update_interval_ms = int(freq_data["update_interval_ms"])
+            if "show_per_channel" in freq_data:
+                config.frequency.show_per_channel = bool(freq_data["show_per_channel"])
+            if "show_average" in freq_data:
+                config.frequency.show_average = bool(freq_data["show_average"])
+
         return config
 
     def merge_cli_args(self, args: Any) -> Config:
@@ -220,6 +249,14 @@ class Config:
             slider=SliderConfig(
                 enabled=self.slider.enabled,
                 width=self.slider.width,
+            ),
+            frequency=FrequencyConfig(
+                enabled=self.frequency.enabled,
+                panel_width=self.frequency.panel_width,
+                window_seconds=self.frequency.window_seconds,
+                update_interval_ms=self.frequency.update_interval_ms,
+                show_per_channel=self.frequency.show_per_channel,
+                show_average=self.frequency.show_average,
             ),
         )
 

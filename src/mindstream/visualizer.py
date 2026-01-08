@@ -5,6 +5,7 @@ BlueMuse + Muse2 リアルタイム脳波可視化クラス
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -23,7 +24,8 @@ from mindstream.constants import (
 
 if TYPE_CHECKING:
     from mindstream.config import Config
-    from mindstream.ui import SliderPanel
+    from mindstream.frequency import FrequencyAnalyzer
+    from mindstream.ui import FrequencyBandPanel, SliderPanel
 
 
 class EEGVisualizer:
@@ -38,12 +40,12 @@ class EEGVisualizer:
         pygame.init()
         self.config = config
 
-        # スライダーパネルの幅を考慮したウィンドウサイズ
-        self.slider_panel: SliderPanel | None = None  # type: ignore[unresolved-reference]
+        # パネル幅を考慮したウィンドウサイズを計算
+        total_width = config.display.window_width
         if config.slider.enabled:
-            total_width = config.display.window_width + config.slider.width
-        else:
-            total_width = config.display.window_width
+            total_width += config.slider.width
+        if config.frequency.enabled:
+            total_width += config.frequency.panel_width
 
         self.screen = pygame.display.set_mode((total_width, config.display.window_height))
         pygame.display.set_caption("MindStream - Muse2 EEG Visualizer")
@@ -52,10 +54,33 @@ class EEGVisualizer:
         self.title_font = pygame.font.Font(None, config.fonts.title_size)
 
         # スライダーパネルを初期化
+        self.slider_panel: SliderPanel | None = None  # type: ignore[unresolved-reference]
         if config.slider.enabled:
             from mindstream.ui import SliderPanel
 
+            # スライダーパネルの位置（周波数パネルがある場合はその左）
+            slider_screen_width = total_width
+            if config.frequency.enabled:
+                slider_screen_width -= config.frequency.panel_width
+
             self.slider_panel = SliderPanel(
+                config,
+                slider_screen_width,
+                config.display.window_height,
+            )
+
+        # 周波数解析を初期化
+        self.frequency_analyzer: FrequencyAnalyzer | None = None  # type: ignore[unresolved-reference]
+        self.frequency_panel: FrequencyBandPanel | None = None  # type: ignore[unresolved-reference]
+        if config.frequency.enabled:
+            from mindstream.frequency import FrequencyAnalyzer
+            from mindstream.ui import FrequencyBandPanel
+
+            self.frequency_analyzer = FrequencyAnalyzer(
+                config.frequency,
+                config.eeg.sample_rate,
+            )
+            self.frequency_panel = FrequencyBandPanel(
                 config,
                 total_width,
                 config.display.window_height,
@@ -297,6 +322,16 @@ class EEGVisualizer:
             # データ更新
             self.update_data()
 
+            # 周波数解析を更新
+            if self.frequency_analyzer is not None and self.frequency_panel is not None:
+                current_time = time.time()
+                result = self.frequency_analyzer.analyze(
+                    self.buffers,
+                    CHANNEL_NAMES,
+                    current_time,
+                )
+                self.frequency_panel.update(result)
+
             # 描画
             self.screen.fill(self.config.colors.background)
             self.draw_grid()
@@ -306,6 +341,10 @@ class EEGVisualizer:
             # スライダーパネルを描画
             if self.slider_panel is not None:
                 self.slider_panel.draw(self.screen)
+
+            # 周波数パネルを描画
+            if self.frequency_panel is not None:
+                self.frequency_panel.draw(self.screen)
 
             pygame.display.flip()
 
