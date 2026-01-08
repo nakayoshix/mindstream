@@ -48,5 +48,8 @@ Thumbs.db
 .env.local
 *.local
 
+# User configuration (use config.example.toml as template)
+config.toml
+
 # Logs
 *.log
