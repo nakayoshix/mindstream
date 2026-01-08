@@ -1,0 +1,38 @@
+# MindStream Configuration Example
+# このファイルをコピーして config.toml として使用できます
+
+# 画面表示設定
+[display]
+window_width = 1200      # ウィンドウ幅 (ピクセル)
+window_height = 800      # ウィンドウ高さ (ピクセル)
+fps = 60                 # フレームレート
+
+# EEG信号処理設定
+[eeg]
+sample_rate = 256              # Muse2のサンプリングレート (Hz)
+max_buffer_seconds = 30        # 最大バッファ秒数
+default_display_seconds = 5    # 初期表示時間幅 (秒) - ←/→で調整可能
+default_amplitude_scale = 100  # 初期振幅スケール (±μV) - ↑/↓で調整可能
+
+# 色設定 (RGB値: 0-255)
+[colors]
+background = [20, 20, 30]      # 背景色
+grid = [40, 40, 60]            # グリッド線の色
+text = [200, 200, 200]         # テキストの色
+
+# チャンネルごとの波形色
+[colors.channels]
+TP9 = [255, 100, 100]          # 赤 - 左耳後ろ
+AF7 = [100, 255, 100]          # 緑 - 左前頭
+AF8 = [100, 100, 255]          # 青 - 右前頭
+TP10 = [255, 255, 100]         # 黄 - 右耳後ろ
+
+# フォント設定
+[fonts]
+title_size = 36                # タイトルフォントサイズ
+label_size = 24                # ラベルフォントサイズ
+
+# レイアウト設定
+[layout]
+padding = 50                   # 画面端からの余白 (ピクセル)
+line_thickness = 2             # 波形の線の太さ (ピクセル)
