@@ -23,6 +23,7 @@ from mindstream.constants import (
 
 if TYPE_CHECKING:
     from mindstream.config import Config
+    from mindstream.ui import SliderPanel
 
 
 class EEGVisualizer:
@@ -37,13 +38,28 @@ class EEGVisualizer:
         pygame.init()
         self.config = config
 
-        self.screen = pygame.display.set_mode(
-            (config.display.window_width, config.display.window_height)
-        )
+        # スライダーパネルの幅を考慮したウィンドウサイズ
+        self.slider_panel: SliderPanel | None = None  # type: ignore[unresolved-reference]
+        if config.slider.enabled:
+            total_width = config.display.window_width + config.slider.width
+        else:
+            total_width = config.display.window_width
+
+        self.screen = pygame.display.set_mode((total_width, config.display.window_height))
         pygame.display.set_caption("MindStream - Muse2 EEG Visualizer")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, config.fonts.label_size)
         self.title_font = pygame.font.Font(None, config.fonts.title_size)
+
+        # スライダーパネルを初期化
+        if config.slider.enabled:
+            from mindstream.ui import SliderPanel
+
+            self.slider_panel = SliderPanel(
+                config,
+                total_width,
+                config.display.window_height,
+            )
 
         # データバッファ（各チャンネル用）
         buffer_size = config.eeg.buffer_size
@@ -56,8 +72,32 @@ class EEGVisualizer:
         self.connected = False
 
         # 表示パラメータ（調整可能）
-        self.display_seconds = config.eeg.default_display_seconds
-        self.amplitude_scale = config.eeg.default_amplitude_scale
+        self._display_seconds = config.eeg.default_display_seconds
+        self._amplitude_scale = config.eeg.default_amplitude_scale
+
+    @property
+    def display_seconds(self) -> int:
+        """表示秒数を取得"""
+        return self._display_seconds
+
+    @display_seconds.setter
+    def display_seconds(self, value: int) -> None:
+        """表示秒数を設定（スライダーと同期）"""
+        self._display_seconds = value
+        if self.slider_panel is not None:
+            self.slider_panel.display_seconds = value
+
+    @property
+    def amplitude_scale(self) -> int:
+        """振幅スケールを取得"""
+        return self._amplitude_scale
+
+    @amplitude_scale.setter
+    def amplitude_scale(self, value: int) -> None:
+        """振幅スケールを設定（スライダーと同期）"""
+        self._amplitude_scale = value
+        if self.slider_panel is not None:
+            self.slider_panel.amplitude_scale = value
 
     def connect_to_stream(self) -> bool:
         """LSLストリームに接続"""
@@ -104,8 +144,8 @@ class EEGVisualizer:
             )
 
         # 垂直線（1秒ごと）
-        for i in range(self.display_seconds + 1):
-            x = padding + i * (width - padding * 2) // self.display_seconds
+        for i in range(self._display_seconds + 1):
+            x = padding + i * (width - padding * 2) // self._display_seconds
             pygame.draw.line(
                 self.screen, self.config.colors.grid, (x, 100), (x, height - padding), 1
             )
@@ -120,7 +160,7 @@ class EEGVisualizer:
         channel_height = (height - 150) // NUM_CHANNELS
 
         # 表示するサンプル数
-        display_samples = self.display_seconds * self.config.eeg.sample_rate
+        display_samples = self._display_seconds * self.config.eeg.sample_rate
 
         for ch in range(NUM_CHANNELS):
             # チャンネルの中心Y座標
@@ -137,7 +177,7 @@ class EEGVisualizer:
             downsampled = data[::step]
 
             # スケーリング（amplitude_scaleを使用）
-            scale = channel_height / (self.amplitude_scale * 2)
+            scale = channel_height / (self._amplitude_scale * 2)
 
             # ポイントリストを作成
             points: list[tuple[int, int]] = []
@@ -184,7 +224,7 @@ class EEGVisualizer:
 
         # 現在の設定値を表示
         settings = self.font.render(
-            f"Time: {self.display_seconds}s (←/→) | Amplitude: ±{self.amplitude_scale}μV (↑/↓)",
+            f"Time: {self._display_seconds}s (←/→) | Amplitude: ±{self._amplitude_scale}μV (↑/↓)",
             True,
             self.config.colors.text,
         )
@@ -212,8 +252,18 @@ class EEGVisualizer:
 
         running = True
         while running:
+            # フレーム時間を計算
+            time_delta = self.clock.tick(self.config.display.fps) / 1000.0
+
             # イベント処理
             for event in pygame.event.get():
+                # スライダーパネルにイベントを渡す
+                if self.slider_panel is not None:
+                    self.slider_panel.process_event(event)
+                    # スライダーの値を同期
+                    self._amplitude_scale = self.slider_panel.amplitude_scale
+                    self._display_seconds = self.slider_panel.display_seconds
+
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN:
@@ -227,18 +277,22 @@ class EEGVisualizer:
                     elif event.key == pygame.K_UP:
                         self.amplitude_scale = max(
                             AMPLITUDE_SCALE_MIN,
-                            self.amplitude_scale - AMPLITUDE_SCALE_STEP,
+                            self._amplitude_scale - AMPLITUDE_SCALE_STEP,
                         )
                     elif event.key == pygame.K_DOWN:
                         self.amplitude_scale = min(
                             AMPLITUDE_SCALE_MAX,
-                            self.amplitude_scale + AMPLITUDE_SCALE_STEP,
+                            self._amplitude_scale + AMPLITUDE_SCALE_STEP,
                         )
                     # 時間軸調整（←/→）
                     elif event.key == pygame.K_LEFT:
-                        self.display_seconds = max(DISPLAY_SECONDS_MIN, self.display_seconds - 1)
+                        self.display_seconds = max(DISPLAY_SECONDS_MIN, self._display_seconds - 1)
                     elif event.key == pygame.K_RIGHT:
-                        self.display_seconds = min(max_display_seconds, self.display_seconds + 1)
+                        self.display_seconds = min(max_display_seconds, self._display_seconds + 1)
+
+            # スライダーパネルを更新
+            if self.slider_panel is not None:
+                self.slider_panel.update(time_delta)
 
             # データ更新
             self.update_data()
@@ -249,7 +303,10 @@ class EEGVisualizer:
             self.draw_waveforms()
             self.draw_status()
 
+            # スライダーパネルを描画
+            if self.slider_panel is not None:
+                self.slider_panel.draw(self.screen)
+
             pygame.display.flip()
-            self.clock.tick(self.config.display.fps)
 
         pygame.quit()

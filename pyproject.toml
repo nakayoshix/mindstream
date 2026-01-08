@@ -47,6 +47,7 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "RUF002", # ambiguous characters in docstrings (Japanese text)
     "RUF003", # ambiguous characters in comments (Japanese text)
     "TC003",  # Move imports into type-checking block (false positive for runtime usage)
 ]

@@ -78,6 +78,14 @@ class LayoutConfig:
 
 
 @dataclass
+class SliderConfig:
+    """スライダー設定"""
+
+    enabled: bool = True
+    width: int = 80
+
+
+@dataclass
 class Config:
     """MindStream全体設定"""
 
@@ -86,6 +94,7 @@ class Config:
     colors: ColorsConfig = field(default_factory=ColorsConfig)
     fonts: FontsConfig = field(default_factory=FontsConfig)
     layout: LayoutConfig = field(default_factory=LayoutConfig)
+    slider: SliderConfig = field(default_factory=SliderConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> Config:
@@ -162,6 +171,14 @@ class Config:
             if "line_thickness" in layout_data:
                 config.layout.line_thickness = int(layout_data["line_thickness"])
 
+        # slider セクション
+        if "slider" in data:
+            slider_data = data["slider"]
+            if "enabled" in slider_data:
+                config.slider.enabled = bool(slider_data["enabled"])
+            if "width" in slider_data:
+                config.slider.width = int(slider_data["width"])
+
         return config
 
     def merge_cli_args(self, args: Any) -> Config:
@@ -199,6 +216,10 @@ class Config:
             layout=LayoutConfig(
                 padding=self.layout.padding,
                 line_thickness=self.layout.line_thickness,
+            ),
+            slider=SliderConfig(
+                enabled=self.slider.enabled,
+                width=self.slider.width,
             ),
         )
 

@@ -5,7 +5,7 @@ BlueMuse + Muse2を使用したリアルタイム脳波可視化プログラム
 ## 特徴
 
 - Muse2の4チャンネル（TP9, AF7, AF8, TP10）をリアルタイム表示
-- 時間軸・振幅スケールの動的調整
+- 時間軸・振幅スケールの動的調整（キーボード＆スライダーUI）
 - LSL (Lab Streaming Layer) 経由でBlueMuseと接続
 - TOML設定ファイルとCLI引数による柔軟な設定
 
@@ -73,6 +73,8 @@ cp config.example.toml config.toml
 
 ## 操作方法
 
+### キーボード操作
+
 | キー | 動作 |
 |------|------|
 | `ESC` | 終了 |
@@ -82,6 +84,14 @@ cp config.example.toml config.toml
 | `↓` | 振幅スケール拡大（波形縮小） |
 | `←` | 時間軸短縮（1秒〜） |
 | `→` | 時間軸延長（〜30秒） |
+
+### スライダーUI
+
+画面右側にスライダーパネルが表示されます:
+- **Amplitude**: 振幅スケール（10〜5000μV）をドラッグで調整
+- **Time**: 表示時間幅（1〜30秒）をドラッグで調整
+
+スライダーとキーボード操作は連動しています。スライダーを無効にするには`config.toml`で`slider.enabled = false`を設定してください。
 
 ## プロジェクト構造
 
@@ -93,11 +103,13 @@ mindstream/
 │   ├── cli.py               # CLI引数パーサー
 │   ├── config.py            # 設定管理（dataclasses + TOML）
 │   ├── constants.py         # 定数定義
+│   ├── ui.py                # UIコンポーネント（スライダー等）
 │   └── visualizer.py        # EEGVisualizerクラス
 ├── tests/                   # テストコード
 │   ├── conftest.py          # pytest fixtures
 │   ├── test_config.py       # 設定読み込みテスト
-│   └── test_cli.py          # CLI引数テスト
+│   ├── test_cli.py          # CLI引数テスト
+│   └── test_ui.py           # UIテスト
 ├── config.example.toml      # 設定ファイルサンプル
 ├── pyproject.toml           # プロジェクト設定
 └── .pre-commit-config.yaml  # pre-commit設定

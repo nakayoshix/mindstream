@@ -36,3 +36,8 @@ label_size = 24                # ラベルフォントサイズ
 [layout]
 padding = 50                   # 画面端からの余白 (ピクセル)
 line_thickness = 2             # 波形の線の太さ (ピクセル)
+
+# スライダー設定
+[slider]
+enabled = true                 # スライダーパネルの表示 (true/false)
+width = 80                     # スライダーパネルの幅 (ピクセル)
