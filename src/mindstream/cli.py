@@ -114,7 +114,7 @@ def main() -> None:
     args = parse_args()
     config = load_config(args)
 
-    from mindstream.visualizer import EEGVisualizer
+    from mindstream.app import MindStreamApp
 
-    visualizer = EEGVisualizer(config)
-    visualizer.run()
+    app = MindStreamApp(config)
+    app.run()

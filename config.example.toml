@@ -37,7 +37,7 @@ label_size = 24                # ラベルフォントサイズ
 padding = 50                   # 画面端からの余白 (ピクセル)
 line_thickness = 2             # 波形の線の太さ (ピクセル)
 
-# スライダー設定
+# スライダー設定（レガシー、サブウィンドウに移動）
 [slider]
 enabled = true                 # スライダーパネルの表示 (true/false)
 width = 80                     # スライダーパネルの幅 (ピクセル)
@@ -50,3 +50,47 @@ window_seconds = 2.0           # FFT窓サイズ (秒) - 周波数分解能に�
 update_interval_ms = 200       # 更新間隔 (ミリ秒) - 小さいほど高速更新
 show_per_channel = true        # チャンネルごとの表示
 show_average = true            # 全チャンネル平均の表示
+
+# パワートレンド設定
+[view.power_trend]
+enabled = true                 # パワートレンドグラフの表示
+time_window_seconds = 30       # トレンド表示の時間幅 (秒)
+show_legend = true             # 凡例の表示
+
+# インジケーター設定
+[view.indicator]
+enabled = true                 # インジケーターの表示
+show_focus = true              # 集中度の表示
+show_relax = true              # リラックス度の表示
+show_meditation = true         # 瞑想度の表示
+show_trend = true              # 変化量の表示
+trend_window_seconds = 60      # 変化量計算の時間幅 (秒)
+
+# インジケーター計算設定
+[indicator]
+focus_baseline = 1.0           # 集中度のベースライン値
+relax_baseline = 1.0           # リラックス度のベースライン値
+meditation_baseline = 1.0      # 瞑想度のベースライン値
+smoothing_factor = 0.3         # スムージング係数 (0-1、大きいほど滑らか)
+
+# ウィンドウ設定
+[windows]
+sync_close = true              # メインウィンドウを閉じたら終了
+
+# メインウィンドウ設定（脳状態インジケーター）
+[windows.main]
+width = 1280                   # ウィンドウ幅
+height = 800                   # ウィンドウ高さ
+position_x = 50                # 初期X位置
+position_y = 50                # 初期Y位置
+title = "MindStream - Brain State"
+visible = true                 # 初期表示
+
+# サブウィンドウ設定（EEG波形）
+[windows.sub]
+width = 1280                   # ウィンドウ幅
+height = 800                   # ウィンドウ高さ
+position_x = 100               # 初期X位置
+position_y = 100               # 初期Y位置
+title = "MindStream - EEG Signals"
+visible = false                # 初期非表示（EキーまたはボタンでON/OFF）

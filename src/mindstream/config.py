@@ -167,6 +167,39 @@ class EventsConfig:
 
 
 @dataclass
+class MainWindowConfig:
+    """メインウィンドウ設定"""
+
+    width: int = 1280
+    height: int = 800
+    position_x: int = 50
+    position_y: int = 50
+    title: str = "MindStream - Brain State"
+    visible: bool = True
+
+
+@dataclass
+class SubWindowConfig:
+    """サブウィンドウ設定"""
+
+    width: int = 1280
+    height: int = 800
+    position_x: int = 100
+    position_y: int = 100
+    title: str = "MindStream - EEG Signals"
+    visible: bool = False
+
+
+@dataclass
+class WindowsConfig:
+    """マルチウィンドウ設定"""
+
+    main: MainWindowConfig = field(default_factory=MainWindowConfig)
+    sub: SubWindowConfig = field(default_factory=SubWindowConfig)
+    sync_close: bool = True
+
+
+@dataclass
 class Config:
     """MindStream全体設定"""
 
@@ -181,6 +214,7 @@ class Config:
     indicator: IndicatorConfig = field(default_factory=IndicatorConfig)
     keybindings: KeybindingsConfig = field(default_factory=KeybindingsConfig)
     events: EventsConfig = field(default_factory=EventsConfig)
+    windows: WindowsConfig = field(default_factory=WindowsConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> Config:
@@ -361,6 +395,44 @@ class Config:
             if "focus_high_threshold" in events_data:
                 config.events.focus_high_threshold = int(events_data["focus_high_threshold"])
 
+        # windows セクション
+        if "windows" in data:
+            windows_data = data["windows"]
+            if "sync_close" in windows_data:
+                config.windows.sync_close = bool(windows_data["sync_close"])
+
+            # windows.main サブセクション
+            if "main" in windows_data:
+                main_data = windows_data["main"]
+                if "width" in main_data:
+                    config.windows.main.width = int(main_data["width"])
+                if "height" in main_data:
+                    config.windows.main.height = int(main_data["height"])
+                if "position_x" in main_data:
+                    config.windows.main.position_x = int(main_data["position_x"])
+                if "position_y" in main_data:
+                    config.windows.main.position_y = int(main_data["position_y"])
+                if "title" in main_data:
+                    config.windows.main.title = str(main_data["title"])
+                if "visible" in main_data:
+                    config.windows.main.visible = bool(main_data["visible"])
+
+            # windows.sub サブセクション
+            if "sub" in windows_data:
+                sub_data = windows_data["sub"]
+                if "width" in sub_data:
+                    config.windows.sub.width = int(sub_data["width"])
+                if "height" in sub_data:
+                    config.windows.sub.height = int(sub_data["height"])
+                if "position_x" in sub_data:
+                    config.windows.sub.position_x = int(sub_data["position_x"])
+                if "position_y" in sub_data:
+                    config.windows.sub.position_y = int(sub_data["position_y"])
+                if "title" in sub_data:
+                    config.windows.sub.title = str(sub_data["title"])
+                if "visible" in sub_data:
+                    config.windows.sub.visible = bool(sub_data["visible"])
+
         return config
 
     def merge_cli_args(self, args: Any) -> Config:
@@ -448,6 +520,25 @@ class Config:
                 enabled=self.events.enabled,
                 focus_low_threshold=self.events.focus_low_threshold,
                 focus_high_threshold=self.events.focus_high_threshold,
+            ),
+            windows=WindowsConfig(
+                main=MainWindowConfig(
+                    width=self.windows.main.width,
+                    height=self.windows.main.height,
+                    position_x=self.windows.main.position_x,
+                    position_y=self.windows.main.position_y,
+                    title=self.windows.main.title,
+                    visible=self.windows.main.visible,
+                ),
+                sub=SubWindowConfig(
+                    width=self.windows.sub.width,
+                    height=self.windows.sub.height,
+                    position_x=self.windows.sub.position_x,
+                    position_y=self.windows.sub.position_y,
+                    title=self.windows.sub.title,
+                    visible=self.windows.sub.visible,
+                ),
+                sync_close=self.windows.sync_close,
             ),
         )
 

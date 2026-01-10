@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MindStream is a real-time EEG visualization application for BlueMuse + Muse2 EEG headband. It displays 4 EEG channels (TP9, AF7, AF8, TP10) via LSL (Lab Streaming Layer) protocol.
+MindStream is a real-time EEG visualization application for BlueMuse + Muse2 EEG headband. It features a multi-window architecture with pygame-gui for UI components, displaying brain state indicators and raw EEG waveforms.
 
 ## Commands
 
@@ -34,24 +34,51 @@ uv run pre-commit run --all-files          # Run on all files
 
 ## Architecture
 
-src-layout structure with modular components:
+Multi-window architecture with shared data hub:
 
 ```
 src/mindstream/
-├── __init__.py      # Package exports
-├── __main__.py      # python -m mindstream entry point
-├── cli.py           # CLI argument parsing (argparse)
-├── config.py        # Configuration dataclasses + TOML loading
-├── constants.py     # Channel names, type aliases
-└── visualizer.py    # EEGVisualizer class (main logic)
+├── __init__.py          # Package exports
+├── __main__.py          # python -m mindstream entry point
+├── app.py               # MindStreamApp - multi-window orchestrator
+├── cli.py               # CLI argument parsing (argparse)
+├── config.py            # Configuration dataclasses + TOML loading
+├── constants.py         # Channel names, type aliases
+├── data_hub.py          # DataHub - shared data layer (LSL, buffers, analyzers)
+├── frequency.py         # FrequencyAnalyzer - FFT analysis
+├── indicator.py         # IndicatorCalculator - brain state indicators
+├── themes/
+│   └── default.json     # pygame-gui theme
+├── ui/
+│   └── frequency_bar.py # Band color constants
+└── windows/
+    ├── __init__.py
+    ├── base.py          # BaseWindow abstract class
+    ├── main_window.py   # Main window (indicators, power trend, freq bars)
+    └── sub_window.py    # Sub window (EEG waveforms, sliders)
 ```
 
-**Key Modules**:
-- `config.py` - Dataclasses for configuration (DisplayConfig, EEGConfig, ColorsConfig, etc.)
-- `cli.py` - CLI entry point with config loading precedence
-- `visualizer.py` - EEGVisualizer class for LSL connection and pygame rendering
+**Key Components**:
 
-**Data Flow**: BlueMuse → LSL Stream → pylsl pulls chunks → Circular buffers → pygame rendering
+- `MindStreamApp` - Orchestrates multiple windows, event routing, main loop
+- `DataHub` - Centralized data management (LSL connection, circular buffers, analyzers)
+- `BaseWindow` - Abstract base class with pygame.Window and pygame_gui.UIManager
+- `MainWindow` - Brain state indicators, power trend graph, frequency bars
+- `SubWindow` - Raw EEG waveforms with amplitude/time sliders (initially hidden)
+
+**Data Flow**:
+```
+BlueMuse → LSL Stream → DataHub.update() → FrequencyAnalyzer/IndicatorCalculator
+                                         ↓
+                              MainWindow (indicators, trends)
+                              SubWindow (waveforms)
+```
+
+**Event Routing** (in app.py):
+1. ESC key → Exit application
+2. pygame-gui events (ui_element) → Route by ui_manager ownership
+3. Window events → Route by event.window attribute
+4. Fallback → Send to both windows
 
 **Configuration Precedence** (high to low):
 1. CLI arguments
@@ -84,8 +111,30 @@ Options:
 
 | Key | Action |
 |-----|--------|
-| ESC | Exit |
+| ESC | Exit application |
 | SPACE | Reconnect to LSL stream |
 | R | Reset buffers |
-| ↑/↓ | Adjust amplitude scale |
-| ←/→ | Adjust time window (1-30 sec) |
+| E | Toggle EEG sub window |
+| ↑/↓ | Adjust amplitude scale (±100μV) |
+| ←/→ | Adjust time window (±1 sec, range 1-30) |
+
+## Window Configuration
+
+Windows can be configured in TOML:
+
+```toml
+[windows.main]
+width = 1280
+height = 800
+position_x = 50
+position_y = 50
+title = "MindStream - Brain State"
+
+[windows.sub]
+width = 1280
+height = 800
+position_x = 100
+position_y = 100
+title = "MindStream - EEG Signals"
+visible = false  # Initially hidden
+```
