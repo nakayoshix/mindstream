@@ -98,6 +98,75 @@ class FrequencyConfig:
 
 
 @dataclass
+class ViewPowerTrendConfig:
+    """パワートレンドビュー設定"""
+
+    enabled: bool = False
+    panel_width: int = 300
+    time_window_seconds: int = 30
+    show_legend: bool = True
+
+
+@dataclass
+class ViewIndicatorConfig:
+    """インジケータービュー設定"""
+
+    enabled: bool = False
+    panel_width: int = 200
+    show_focus: bool = True
+    show_relax: bool = True
+    show_meditation: bool = False
+    show_trend: bool = True
+    trend_window_seconds: int = 60
+
+
+@dataclass
+class ViewConfig:
+    """ビュー全体設定"""
+
+    # 初期レイアウト: classic, trend, indicator, full
+    default_layout: str = "classic"
+    # 各ビューの有効/無効
+    raw_waveform: bool = True
+    frequency_bars: bool = True
+    # サブ設定
+    power_trend: ViewPowerTrendConfig = field(default_factory=ViewPowerTrendConfig)
+    indicator: ViewIndicatorConfig = field(default_factory=ViewIndicatorConfig)
+
+
+@dataclass
+class IndicatorConfig:
+    """インジケーター計算設定"""
+
+    # 正規化用のベースライン値
+    focus_baseline: float = 1.0
+    relax_baseline: float = 1.0
+    meditation_baseline: float = 1.0
+    # スムージング係数（0-1、大きいほど滑らか）
+    smoothing_factor: float = 0.3
+
+
+@dataclass
+class KeybindingsConfig:
+    """キーバインド設定"""
+
+    toggle_raw_waveform: str = "1"
+    toggle_frequency_bars: str = "2"
+    toggle_power_trend: str = "3"
+    toggle_focus_relax: str = "4"
+    cycle_layout: str = "TAB"
+
+
+@dataclass
+class EventsConfig:
+    """イベント/通知設定（将来拡張用）"""
+
+    enabled: bool = False
+    focus_low_threshold: int = 20
+    focus_high_threshold: int = 80
+
+
+@dataclass
 class Config:
     """MindStream全体設定"""
 
@@ -108,6 +177,10 @@ class Config:
     layout: LayoutConfig = field(default_factory=LayoutConfig)
     slider: SliderConfig = field(default_factory=SliderConfig)
     frequency: FrequencyConfig = field(default_factory=FrequencyConfig)
+    view: ViewConfig = field(default_factory=ViewConfig)
+    indicator: IndicatorConfig = field(default_factory=IndicatorConfig)
+    keybindings: KeybindingsConfig = field(default_factory=KeybindingsConfig)
+    events: EventsConfig = field(default_factory=EventsConfig)
 
     @classmethod
     def from_toml(cls, path: Path) -> Config:
@@ -208,6 +281,86 @@ class Config:
             if "show_average" in freq_data:
                 config.frequency.show_average = bool(freq_data["show_average"])
 
+        # view セクション
+        if "view" in data:
+            view_data = data["view"]
+            if "default_layout" in view_data:
+                config.view.default_layout = str(view_data["default_layout"])
+            if "raw_waveform" in view_data:
+                config.view.raw_waveform = bool(view_data["raw_waveform"])
+            if "frequency_bars" in view_data:
+                config.view.frequency_bars = bool(view_data["frequency_bars"])
+
+            # view.power_trend サブセクション
+            if "power_trend" in view_data:
+                pt_data = view_data["power_trend"]
+                if "enabled" in pt_data:
+                    config.view.power_trend.enabled = bool(pt_data["enabled"])
+                if "panel_width" in pt_data:
+                    config.view.power_trend.panel_width = int(pt_data["panel_width"])
+                if "time_window_seconds" in pt_data:
+                    config.view.power_trend.time_window_seconds = int(
+                        pt_data["time_window_seconds"]
+                    )
+                if "show_legend" in pt_data:
+                    config.view.power_trend.show_legend = bool(pt_data["show_legend"])
+
+            # view.indicator サブセクション
+            if "indicator" in view_data:
+                ind_data = view_data["indicator"]
+                if "enabled" in ind_data:
+                    config.view.indicator.enabled = bool(ind_data["enabled"])
+                if "panel_width" in ind_data:
+                    config.view.indicator.panel_width = int(ind_data["panel_width"])
+                if "show_focus" in ind_data:
+                    config.view.indicator.show_focus = bool(ind_data["show_focus"])
+                if "show_relax" in ind_data:
+                    config.view.indicator.show_relax = bool(ind_data["show_relax"])
+                if "show_meditation" in ind_data:
+                    config.view.indicator.show_meditation = bool(ind_data["show_meditation"])
+                if "show_trend" in ind_data:
+                    config.view.indicator.show_trend = bool(ind_data["show_trend"])
+                if "trend_window_seconds" in ind_data:
+                    config.view.indicator.trend_window_seconds = int(
+                        ind_data["trend_window_seconds"]
+                    )
+
+        # indicator セクション
+        if "indicator" in data:
+            ind_data = data["indicator"]
+            if "focus_baseline" in ind_data:
+                config.indicator.focus_baseline = float(ind_data["focus_baseline"])
+            if "relax_baseline" in ind_data:
+                config.indicator.relax_baseline = float(ind_data["relax_baseline"])
+            if "meditation_baseline" in ind_data:
+                config.indicator.meditation_baseline = float(ind_data["meditation_baseline"])
+            if "smoothing_factor" in ind_data:
+                config.indicator.smoothing_factor = float(ind_data["smoothing_factor"])
+
+        # keybindings セクション
+        if "keybindings" in data:
+            kb_data = data["keybindings"]
+            if "toggle_raw_waveform" in kb_data:
+                config.keybindings.toggle_raw_waveform = str(kb_data["toggle_raw_waveform"])
+            if "toggle_frequency_bars" in kb_data:
+                config.keybindings.toggle_frequency_bars = str(kb_data["toggle_frequency_bars"])
+            if "toggle_power_trend" in kb_data:
+                config.keybindings.toggle_power_trend = str(kb_data["toggle_power_trend"])
+            if "toggle_focus_relax" in kb_data:
+                config.keybindings.toggle_focus_relax = str(kb_data["toggle_focus_relax"])
+            if "cycle_layout" in kb_data:
+                config.keybindings.cycle_layout = str(kb_data["cycle_layout"])
+
+        # events セクション
+        if "events" in data:
+            events_data = data["events"]
+            if "enabled" in events_data:
+                config.events.enabled = bool(events_data["enabled"])
+            if "focus_low_threshold" in events_data:
+                config.events.focus_low_threshold = int(events_data["focus_low_threshold"])
+            if "focus_high_threshold" in events_data:
+                config.events.focus_high_threshold = int(events_data["focus_high_threshold"])
+
         return config
 
     def merge_cli_args(self, args: Any) -> Config:
@@ -257,6 +410,44 @@ class Config:
                 update_interval_ms=self.frequency.update_interval_ms,
                 show_per_channel=self.frequency.show_per_channel,
                 show_average=self.frequency.show_average,
+            ),
+            view=ViewConfig(
+                default_layout=self.view.default_layout,
+                raw_waveform=self.view.raw_waveform,
+                frequency_bars=self.view.frequency_bars,
+                power_trend=ViewPowerTrendConfig(
+                    enabled=self.view.power_trend.enabled,
+                    panel_width=self.view.power_trend.panel_width,
+                    time_window_seconds=self.view.power_trend.time_window_seconds,
+                    show_legend=self.view.power_trend.show_legend,
+                ),
+                indicator=ViewIndicatorConfig(
+                    enabled=self.view.indicator.enabled,
+                    panel_width=self.view.indicator.panel_width,
+                    show_focus=self.view.indicator.show_focus,
+                    show_relax=self.view.indicator.show_relax,
+                    show_meditation=self.view.indicator.show_meditation,
+                    show_trend=self.view.indicator.show_trend,
+                    trend_window_seconds=self.view.indicator.trend_window_seconds,
+                ),
+            ),
+            indicator=IndicatorConfig(
+                focus_baseline=self.indicator.focus_baseline,
+                relax_baseline=self.indicator.relax_baseline,
+                meditation_baseline=self.indicator.meditation_baseline,
+                smoothing_factor=self.indicator.smoothing_factor,
+            ),
+            keybindings=KeybindingsConfig(
+                toggle_raw_waveform=self.keybindings.toggle_raw_waveform,
+                toggle_frequency_bars=self.keybindings.toggle_frequency_bars,
+                toggle_power_trend=self.keybindings.toggle_power_trend,
+                toggle_focus_relax=self.keybindings.toggle_focus_relax,
+                cycle_layout=self.keybindings.cycle_layout,
+            ),
+            events=EventsConfig(
+                enabled=self.events.enabled,
+                focus_low_threshold=self.events.focus_low_threshold,
+                focus_high_threshold=self.events.focus_high_threshold,
             ),
         )
 

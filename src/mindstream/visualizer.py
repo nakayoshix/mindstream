@@ -20,12 +20,23 @@ from mindstream.constants import (
     CHANNEL_NAMES,
     DISPLAY_SECONDS_MIN,
     NUM_CHANNELS,
+    LayoutPreset,
+    ViewMode,
 )
 
 if TYPE_CHECKING:
     from mindstream.config import Config
+    from mindstream.events import EventManager
     from mindstream.frequency import FrequencyAnalyzer
-    from mindstream.ui import FrequencyBandPanel, SliderPanel
+    from mindstream.indicators import IndicatorCalculator
+    from mindstream.ui import (
+        FocusRelaxPanel,
+        FrequencyBandPanel,
+        PowerTrendPanel,
+        SliderPanel,
+        Toolbar,
+        ViewManager,
+    )
 
 
 class EEGVisualizer:
@@ -40,25 +51,42 @@ class EEGVisualizer:
         pygame.init()
         self.config = config
 
-        # パネル幅を考慮したウィンドウサイズを計算
-        total_width = config.display.window_width
-        if config.slider.enabled:
-            total_width += config.slider.width
-        if config.frequency.enabled:
-            total_width += config.frequency.panel_width
+        # ツールバーの高さ
+        self.toolbar_height = 40
 
-        self.screen = pygame.display.set_mode((total_width, config.display.window_height))
+        # パネル幅を考慮したウィンドウサイズを計算
+        self.base_width = config.display.window_width
+        total_width = self._calculate_total_width()
+        total_height = config.display.window_height + self.toolbar_height
+
+        self.screen = pygame.display.set_mode((total_width, total_height))
         pygame.display.set_caption("MindStream - Muse2 EEG Visualizer")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, config.fonts.label_size)
         self.title_font = pygame.font.Font(None, config.fonts.title_size)
+
+        # ViewManagerを初期化
+        from mindstream.ui import ViewManager
+
+        self.view_manager: ViewManager = ViewManager(
+            config, total_width, config.display.window_height
+        )
+
+        # ツールバーを初期化
+        from mindstream.ui import Toolbar
+
+        self.toolbar: Toolbar = Toolbar(
+            config,
+            total_width,
+            on_mode_toggle=self._on_mode_toggle,
+            on_layout_cycle=self._on_layout_cycle,
+        )
 
         # スライダーパネルを初期化
         self.slider_panel: SliderPanel | None = None  # type: ignore[unresolved-reference]
         if config.slider.enabled:
             from mindstream.ui import SliderPanel
 
-            # スライダーパネルの位置（周波数パネルがある場合はその左）
             slider_screen_width = total_width
             if config.frequency.enabled:
                 slider_screen_width -= config.frequency.panel_width
@@ -85,6 +113,64 @@ class EEGVisualizer:
                 total_width,
                 config.display.window_height,
             )
+            self.view_manager.register_panel(ViewMode.FREQUENCY_BARS, self.frequency_panel)
+
+        # パワートレンドパネルを初期化（常に初期化、切り替え可能に）
+        self.power_trend_panel: PowerTrendPanel | None = None  # type: ignore[unresolved-reference]
+        if True:
+            from mindstream.ui import PowerTrendPanel
+
+            panel_width = config.view.power_trend.panel_width
+            panel_x = total_width - panel_width
+            if config.frequency.enabled:
+                panel_x -= config.frequency.panel_width
+
+            self.power_trend_panel = PowerTrendPanel(
+                config,
+                pygame.Rect(
+                    panel_x, self.toolbar_height, panel_width, config.display.window_height
+                ),
+            )
+            if self.frequency_analyzer:
+                self.power_trend_panel.set_power_history(self.frequency_analyzer.power_history)
+            self.view_manager.register_panel(ViewMode.POWER_TREND, self.power_trend_panel)
+
+        # インジケーターパネルを初期化（常に初期化、切り替え可能に）
+        self.indicator_calculator: IndicatorCalculator | None = None  # type: ignore[unresolved-reference]
+        self.indicator_panel: FocusRelaxPanel | None = None  # type: ignore[unresolved-reference]
+        if True:
+            from mindstream.indicators import IndicatorCalculator
+            from mindstream.ui import FocusRelaxPanel
+
+            self.indicator_calculator = IndicatorCalculator(config.indicator)
+
+            panel_width = config.view.indicator.panel_width
+            panel_x = total_width - panel_width
+            if config.frequency.enabled:
+                panel_x -= config.frequency.panel_width
+
+            self.indicator_panel = FocusRelaxPanel(
+                config,
+                pygame.Rect(
+                    panel_x, self.toolbar_height, panel_width, config.display.window_height
+                ),
+                self.indicator_calculator,
+            )
+            self.view_manager.register_panel(ViewMode.FOCUS_RELAX, self.indicator_panel)
+
+        # イベントマネージャーを初期化
+        self.event_manager: EventManager | None = None  # type: ignore[unresolved-reference]
+        if config.events.enabled:
+            from mindstream.events import EventManager
+
+            self.event_manager = EventManager(config.events)
+            self.event_manager.dispatcher.register_handler(self._on_brain_event)
+
+        # 生波形ビューをViewManagerに登録（ダミーパネルとして）
+        self.view_manager.active_modes.add(ViewMode.RAW_WAVEFORM)
+
+        # 初期レイアウトを設定
+        self._apply_initial_layout()
 
         # データバッファ（各チャンネル用）
         buffer_size = config.eeg.buffer_size
@@ -99,6 +185,45 @@ class EEGVisualizer:
         # 表示パラメータ（調整可能）
         self._display_seconds = config.eeg.default_display_seconds
         self._amplitude_scale = config.eeg.default_amplitude_scale
+
+    def _calculate_total_width(self) -> int:
+        """ウィンドウの総幅を計算"""
+        total_width = self.base_width
+        if self.config.slider.enabled:
+            total_width += self.config.slider.width
+        if self.config.frequency.enabled:
+            total_width += self.config.frequency.panel_width
+        return total_width
+
+    def _apply_initial_layout(self) -> None:
+        """初期レイアウトを適用"""
+        layout_name = self.config.view.default_layout.lower()
+        layout_map = {
+            "classic": LayoutPreset.CLASSIC,
+            "trend": LayoutPreset.TREND,
+            "indicator": LayoutPreset.INDICATOR,
+            "full": LayoutPreset.FULL,
+        }
+        preset = layout_map.get(layout_name, LayoutPreset.CLASSIC)
+        self.view_manager.layout_preset = preset
+        self.toolbar.update_button_states(self.view_manager.active_modes)
+        self.toolbar.set_layout_label(preset)
+
+    def _on_mode_toggle(self, mode: ViewMode) -> None:
+        """ビューモードのトグル"""
+        self.view_manager.toggle_mode(mode)
+        self.toolbar.update_button_states(self.view_manager.active_modes)
+
+    def _on_layout_cycle(self) -> None:
+        """レイアウトをサイクル"""
+        new_preset = self.view_manager.cycle_layout()
+        self.toolbar.update_button_states(self.view_manager.active_modes)
+        self.toolbar.set_layout_label(new_preset)
+
+    def _on_brain_event(self, event) -> None:
+        """脳状態イベントのハンドラ"""
+        # 将来的にはここで通知処理を行う
+        print(f"Brain Event: {event.event_type} = {event.value:.1f}")
 
     @property
     def display_seconds(self) -> int:
@@ -160,10 +285,11 @@ class EEGVisualizer:
         width = self.config.display.window_width
         height = self.config.display.window_height
         padding = self.config.layout.padding
+        offset_y = self.toolbar_height
 
         # 水平線
         for i in range(NUM_CHANNELS + 1):
-            y = 100 + i * (height - 150) // NUM_CHANNELS
+            y = offset_y + 100 + i * (height - 150) // NUM_CHANNELS
             pygame.draw.line(
                 self.screen, self.config.colors.grid, (padding, y), (width - padding, y), 1
             )
@@ -172,7 +298,11 @@ class EEGVisualizer:
         for i in range(self._display_seconds + 1):
             x = padding + i * (width - padding * 2) // self._display_seconds
             pygame.draw.line(
-                self.screen, self.config.colors.grid, (x, 100), (x, height - padding), 1
+                self.screen,
+                self.config.colors.grid,
+                (x, offset_y + 100),
+                (x, offset_y + height - padding),
+                1,
             )
 
     def draw_waveforms(self) -> None:
@@ -180,6 +310,7 @@ class EEGVisualizer:
         width = self.config.display.window_width
         height = self.config.display.window_height
         padding = self.config.layout.padding
+        offset_y = self.toolbar_height
 
         plot_width = width - padding * 2
         channel_height = (height - 150) // NUM_CHANNELS
@@ -189,7 +320,7 @@ class EEGVisualizer:
 
         for ch in range(NUM_CHANNELS):
             # チャンネルの中心Y座標
-            center_y = 100 + ch * channel_height + channel_height // 2
+            center_y = offset_y + 100 + ch * channel_height + channel_height // 2
 
             # データを取得（最新のdisplay_samples分のみ）
             data = list(self.buffers[ch])[-display_samples:]
@@ -209,7 +340,10 @@ class EEGVisualizer:
             for i, value in enumerate(downsampled):
                 x = padding + (i * plot_width) // len(downsampled)
                 y = center_y - int(value * scale)
-                y = max(100 + ch * channel_height, min(100 + (ch + 1) * channel_height, y))
+                y = max(
+                    offset_y + 100 + ch * channel_height,
+                    min(offset_y + 100 + (ch + 1) * channel_height, y),
+                )
                 points.append((x, y))
 
             # 波形を描画
@@ -233,10 +367,11 @@ class EEGVisualizer:
         """接続状態を表示"""
         width = self.config.display.window_width
         height = self.config.display.window_height
+        offset_y = self.toolbar_height
 
         # タイトル
         title = self.title_font.render("MindStream", True, self.config.colors.text)
-        self.screen.blit(title, (width // 2 - title.get_width() // 2, 20))
+        self.screen.blit(title, (width // 2 - title.get_width() // 2, offset_y + 20))
 
         # 接続状態
         if self.connected:
@@ -245,21 +380,23 @@ class EEGVisualizer:
             status = self.font.render(
                 "○ Disconnected - Press SPACE to connect", True, (255, 100, 100)
             )
-        self.screen.blit(status, (width // 2 - status.get_width() // 2, 55))
+        self.screen.blit(status, (width // 2 - status.get_width() // 2, offset_y + 55))
 
         # 現在の設定値を表示
         settings = self.font.render(
-            f"Time: {self._display_seconds}s (←/→) | Amplitude: ±{self._amplitude_scale}μV (↑/↓)",
+            f"Time: {self._display_seconds}s | Amplitude: ±{self._amplitude_scale}μV",
             True,
             self.config.colors.text,
         )
-        self.screen.blit(settings, (width // 2 - settings.get_width() // 2, 75))
+        self.screen.blit(settings, (width // 2 - settings.get_width() // 2, offset_y + 75))
 
         # 操作説明
         help_text = self.font.render(
             "ESC: Quit | SPACE: Reconnect | R: Reset", True, self.config.colors.text
         )
-        self.screen.blit(help_text, (width // 2 - help_text.get_width() // 2, height - 30))
+        self.screen.blit(
+            help_text, (width // 2 - help_text.get_width() // 2, offset_y + height - 30)
+        )
 
     def reset_buffers(self) -> None:
         """バッファをリセット"""
@@ -268,12 +405,58 @@ class EEGVisualizer:
             buf.clear()
             buf.extend([0.0] * buffer_size)
 
+    def _handle_keydown(self, key: int) -> bool:
+        """キー入力を処理
+
+        Args:
+            key: pygameキーコード
+
+        Returns:
+            終了要求の場合True
+        """
+        max_display_seconds = self.config.eeg.max_buffer_seconds
+        kb = self.config.keybindings
+
+        if key == pygame.K_ESCAPE:
+            return True
+        elif key == pygame.K_SPACE:
+            self.connect_to_stream()
+        elif key == pygame.K_r:
+            self.reset_buffers()
+        # 振幅スケール調整（↑/↓）
+        elif key == pygame.K_UP:
+            self.amplitude_scale = max(
+                AMPLITUDE_SCALE_MIN,
+                self._amplitude_scale - AMPLITUDE_SCALE_STEP,
+            )
+        elif key == pygame.K_DOWN:
+            self.amplitude_scale = min(
+                AMPLITUDE_SCALE_MAX,
+                self._amplitude_scale + AMPLITUDE_SCALE_STEP,
+            )
+        # 時間軸調整（←/→）
+        elif key == pygame.K_LEFT:
+            self.display_seconds = max(DISPLAY_SECONDS_MIN, self._display_seconds - 1)
+        elif key == pygame.K_RIGHT:
+            self.display_seconds = min(max_display_seconds, self._display_seconds + 1)
+        # ビュー切り替え
+        elif key == pygame.K_1 or (kb.toggle_raw_waveform == "1" and key == pygame.K_1):
+            self._on_mode_toggle(ViewMode.RAW_WAVEFORM)
+        elif key == pygame.K_2 or (kb.toggle_frequency_bars == "2" and key == pygame.K_2):
+            self._on_mode_toggle(ViewMode.FREQUENCY_BARS)
+        elif key == pygame.K_3 or (kb.toggle_power_trend == "3" and key == pygame.K_3):
+            self._on_mode_toggle(ViewMode.POWER_TREND)
+        elif key == pygame.K_4 or (kb.toggle_focus_relax == "4" and key == pygame.K_4):
+            self._on_mode_toggle(ViewMode.FOCUS_RELAX)
+        elif key == pygame.K_TAB:
+            self._on_layout_cycle()
+
+        return False
+
     def run(self) -> None:
         """メインループ"""
         # 初回接続を試みる
         self.connect_to_stream()
-
-        max_display_seconds = self.config.eeg.max_buffer_seconds
 
         running = True
         while running:
@@ -282,6 +465,10 @@ class EEGVisualizer:
 
             # イベント処理
             for event in pygame.event.get():
+                # ツールバーにイベントを渡す
+                if self.toolbar.process_event(event):
+                    continue
+
                 # スライダーパネルにイベントを渡す
                 if self.slider_panel is not None:
                     self.slider_panel.process_event(event)
@@ -289,31 +476,10 @@ class EEGVisualizer:
                     self._amplitude_scale = self.slider_panel.amplitude_scale
                     self._display_seconds = self.slider_panel.display_seconds
 
-                if event.type == pygame.QUIT:
+                if event.type == pygame.QUIT or (
+                    event.type == pygame.KEYDOWN and self._handle_keydown(event.key)
+                ):
                     running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        running = False
-                    elif event.key == pygame.K_SPACE:
-                        self.connect_to_stream()
-                    elif event.key == pygame.K_r:
-                        self.reset_buffers()
-                    # 振幅スケール調整（↑/↓）
-                    elif event.key == pygame.K_UP:
-                        self.amplitude_scale = max(
-                            AMPLITUDE_SCALE_MIN,
-                            self._amplitude_scale - AMPLITUDE_SCALE_STEP,
-                        )
-                    elif event.key == pygame.K_DOWN:
-                        self.amplitude_scale = min(
-                            AMPLITUDE_SCALE_MAX,
-                            self._amplitude_scale + AMPLITUDE_SCALE_STEP,
-                        )
-                    # 時間軸調整（←/→）
-                    elif event.key == pygame.K_LEFT:
-                        self.display_seconds = max(DISPLAY_SECONDS_MIN, self._display_seconds - 1)
-                    elif event.key == pygame.K_RIGHT:
-                        self.display_seconds = min(max_display_seconds, self._display_seconds + 1)
 
             # スライダーパネルを更新
             if self.slider_panel is not None:
@@ -323,28 +489,62 @@ class EEGVisualizer:
             self.update_data()
 
             # 周波数解析を更新
-            if self.frequency_analyzer is not None and self.frequency_panel is not None:
+            freq_result = None
+            if self.frequency_analyzer is not None:
                 current_time = time.time()
-                result = self.frequency_analyzer.analyze(
+                freq_result = self.frequency_analyzer.analyze(
                     self.buffers,
                     CHANNEL_NAMES,
                     current_time,
                 )
-                self.frequency_panel.update(result)
+
+                # 周波数パネルを更新
+                if self.frequency_panel is not None:
+                    self.frequency_panel.update(freq_result)
+
+            # インジケーターを更新
+            if freq_result is not None and self.indicator_panel is not None:
+                self.indicator_panel.update(freq_result)
+
+                # イベント検知
+                if self.event_manager is not None and self.indicator_calculator is not None:
+                    indicators = self.indicator_calculator.history.entries
+                    if indicators:
+                        self.event_manager.process(indicators[-1])
 
             # 描画
             self.screen.fill(self.config.colors.background)
-            self.draw_grid()
-            self.draw_waveforms()
-            self.draw_status()
+
+            # ツールバーを描画
+            self.toolbar.draw(self.screen)
+
+            # 生波形を描画（アクティブな場合）
+            if self.view_manager.is_mode_active(ViewMode.RAW_WAVEFORM):
+                self.draw_grid()
+                self.draw_waveforms()
+                self.draw_status()
 
             # スライダーパネルを描画
             if self.slider_panel is not None:
                 self.slider_panel.draw(self.screen)
 
-            # 周波数パネルを描画
-            if self.frequency_panel is not None:
+            # 周波数パネルを描画（アクティブな場合）
+            if self.frequency_panel is not None and self.view_manager.is_mode_active(
+                ViewMode.FREQUENCY_BARS
+            ):
                 self.frequency_panel.draw(self.screen)
+
+            # パワートレンドパネルを描画（アクティブな場合）
+            if self.power_trend_panel is not None and self.view_manager.is_mode_active(
+                ViewMode.POWER_TREND
+            ):
+                self.power_trend_panel.draw(self.screen)
+
+            # インジケーターパネルを描画（アクティブな場合）
+            if self.indicator_panel is not None and self.view_manager.is_mode_active(
+                ViewMode.FOCUS_RELAX
+            ):
+                self.indicator_panel.draw(self.screen)
 
             pygame.display.flip()
 

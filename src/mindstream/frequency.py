@@ -5,14 +5,13 @@ EEGデータのFFT解析と周波数帯域パワー計算を提供する。
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from collections import deque
-
     from mindstream.config import FrequencyConfig
 
 # 周波数帯域定義 (Hz)
@@ -53,6 +52,76 @@ class FrequencyAnalysisResult:
     timestamp: float  # 解析時刻
 
 
+@dataclass
+class PowerHistoryEntry:
+    """パワー履歴エントリ"""
+
+    timestamp: float
+    band_powers: dict[str, float]  # 帯域名 -> 相対パワー
+
+
+@dataclass
+class PowerHistory:
+    """パワー履歴データ
+
+    周波数帯域パワーの時系列履歴を保持する。
+    """
+
+    max_entries: int = 300  # 最大エントリ数（5分相当 @ 1Hz更新）
+    entries: deque[PowerHistoryEntry] = field(default_factory=deque)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.entries, deque):
+            self.entries = deque(self.entries, maxlen=self.max_entries)
+        else:
+            self.entries = deque(self.entries, maxlen=self.max_entries)
+
+    def add(self, timestamp: float, band_powers: dict[str, float]) -> None:
+        """履歴にエントリを追加
+
+        Args:
+            timestamp: タイムスタンプ
+            band_powers: 帯域名と相対パワーのマッピング
+        """
+        self.entries.append(PowerHistoryEntry(timestamp=timestamp, band_powers=band_powers))
+
+    def get_recent(self, seconds: float) -> list[PowerHistoryEntry]:
+        """直近N秒のエントリを取得
+
+        Args:
+            seconds: 取得する秒数
+
+        Returns:
+            直近N秒のエントリリスト
+        """
+        if not self.entries:
+            return []
+
+        latest_time = self.entries[-1].timestamp
+        cutoff = latest_time - seconds
+
+        return [e for e in self.entries if e.timestamp >= cutoff]
+
+    def get_band_series(self, band_name: str, seconds: float) -> tuple[list[float], list[float]]:
+        """特定帯域の時系列データを取得
+
+        Args:
+            band_name: 帯域名
+            seconds: 取得する秒数
+
+        Returns:
+            (タイムスタンプのリスト, パワー値のリスト)
+        """
+        entries = self.get_recent(seconds)
+        timestamps = []
+        powers = []
+        for entry in entries:
+            if band_name in entry.band_powers:
+                timestamps.append(entry.timestamp)
+                powers.append(entry.band_powers[band_name])
+        return timestamps, powers
+
+
 class FrequencyAnalyzer:
     """リアルタイムEEG周波数帯域解析器"""
 
@@ -67,6 +136,9 @@ class FrequencyAnalyzer:
         self.sample_rate = sample_rate
         self._last_update_time: float = -float("inf")  # 初回は必ず更新
         self._cached_result: FrequencyAnalysisResult | None = None
+
+        # パワー履歴（300エントリ = 5分間 @ 1Hz更新）
+        self.power_history = PowerHistory(max_entries=300)
 
         # FFT窓サイズ計算
         self._window_samples = int(config.window_seconds * sample_rate)
@@ -183,5 +255,9 @@ class FrequencyAnalyzer:
             average_powers=average_powers,
             timestamp=current_time,
         )
+
+        # パワー履歴に追加（平均の相対パワーを記録）
+        history_entry = {band_name: bp.relative_power for band_name, bp in average_powers.items()}
+        self.power_history.add(current_time, history_entry)
 
         return self._cached_result
